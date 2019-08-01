@@ -271,6 +271,35 @@ class SlidePlaceholder(_BaseSlidePlaceholder):
     Placeholder shape on a slide. Inherits shape properties from its
     corresponding slide layout placeholder.
     """
+    
+    def insert_chart(self, chart_type, chart_data):
+        """
+        Return a |PlaceholderGraphicFrame| object containing a new chart of
+        *chart_type* depicting *chart_data* and having the same position and
+        size as this placeholder. *chart_type* is one of the
+        :ref:`XlChartType` enumeration values. *chart_data* is a |ChartData|
+        object populated with the categories and series values for the chart.
+        Note that the new |Chart| object is not returned directly. The chart
+        object may be accessed using the
+        :attr:`~.PlaceholderGraphicFrame.chart` property of the returned
+        |PlaceholderGraphicFrame| object.
+        """
+        rId = self.part.add_chart_part(chart_type, chart_data)
+        graphicFrame = self._new_chart_graphicFrame(
+            rId, self.left, self.top, self.width, self.height
+        )
+        self._replace_placeholder_with(graphicFrame)
+        return PlaceholderGraphicFrame(graphicFrame, self._parent)
+
+    def _new_chart_graphicFrame(self, rId, x, y, cx, cy):
+        """
+        Return a newly created `p:graphicFrame` element having the specified
+        position and size and containing the chart identified by *rId*.
+        """
+        id_, name = self.shape_id, self.name
+        return CT_GraphicalObjectFrame.new_chart_graphicFrame(
+            id_, name, rId, x, y, cx, cy
+        )
 
 
 class ChartPlaceholder(_BaseSlidePlaceholder):
