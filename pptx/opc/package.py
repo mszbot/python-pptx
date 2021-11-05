@@ -114,7 +114,7 @@ class OpcPackage(object):
         integer portion of the partname. Example: '/ppt/slides/slide%d.xml'
         """
         name = tmpl.split(os.sep)[2]
-        self.partnames[name] += 1
+        self.partnames[name] += 1000
         candidate_partname = tmpl % self.partnames[name]
         return PackURI(candidate_partname)
 
