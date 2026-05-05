@@ -6,6 +6,7 @@ presentations to and from a .pptx file.
 
 from __future__ import annotations
 
+import os
 import collections
 from typing import IO, TYPE_CHECKING, DefaultDict, Iterator, Mapping, Set, cast
 
@@ -75,6 +76,7 @@ class OpcPackage(_RelatableMixin):
 
     def __init__(self, pkg_file: str | IO[bytes]):
         self._pkg_file = pkg_file
+        self.partnames = collections.defaultdict(int)
 
     @classmethod
     def open(cls, pkg_file: str | IO[bytes]) -> Self:
@@ -140,13 +142,18 @@ class OpcPackage(_RelatableMixin):
         # --- expected next partname is tmpl % n where n is one greater than the number
         # --- of existing partnames that match tmpl. Speed up finding the next one
         # --- (maybe) by searching from the end downward rather than from 1 upward.
-        prefix = tmpl[: (tmpl % 42).find("42")]
-        partnames = {p.partname for p in self.iter_parts() if p.partname.startswith(prefix)}
-        for n in range(len(partnames) + 1, 0, -1):
-            candidate_partname = tmpl % n
-            if candidate_partname not in partnames:
-                return PackURI(candidate_partname)
-        raise Exception("ProgrammingError: ran out of candidate_partnames")  # pragma: no cover
+        # prefix = tmpl[: (tmpl % 42).find("42")]
+        # partnames = {p.partname for p in self.iter_parts() if p.partname.startswith(prefix)}
+        # for n in range(len(partnames) + 1, 0, -1):
+        #     candidate_partname = tmpl % n
+        #     if candidate_partname not in partnames:
+        #         return PackURI(candidate_partname)
+        # raise Exception("ProgrammingError: ran out of candidate_partnames")  # pragma: no cover
+
+        name = tmpl.split(os.sep)[2]
+        self.partnames[name] += 1000
+        candidate_partname = tmpl % self.partnames[name]
+        return PackURI(candidate_partname)
 
     def save(self, pkg_file: str | IO[bytes]) -> None:
         """Save this package to `pkg_file`.
