@@ -25,7 +25,11 @@ from pptx.parts.slide import (
 if TYPE_CHECKING:
     from pptx.opc.package import Part
 
-__version__ = "1.0.2"
+# PEP 440 local version: upstream 1.0.2 plus this fork's patches. Bump the
+# trailing number on every fork change that needs to reach a deployed app --
+# pip resolves a git branch requirement by version, so an unchanged version
+# means it re-clones and then skips the install, silently leaving stale code.
+__version__ = "1.0.2+pptxbuilder.1"
 
 sys.modules["pptx.exceptions"] = exceptions
 del sys
