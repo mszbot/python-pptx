@@ -46,9 +46,37 @@ class TextFitter(tuple):
         *line_source* that will fit in this fitter's width and *remainder* is
         a |_LineSource| object containing the text following the break point.
         """
-        lines = _BinarySearchTree.from_ordered_sequence(line_source)
+        words = line_source._text.split()
+        if not words:
+            return None
         predicate = self._fits_in_width_predicate(point_size)
-        return lines.find_max(predicate)
+
+        def fits(word_count):
+            return predicate(_Line(" ".join(words[:word_count]), None))
+
+        # ---not even one word fits, so there is no break point---
+        if not fits(1):
+            return None
+
+        # Gallop upward to bracket the break point before binary searching, so
+        # that every probe string stays within ~2x the final line length. A
+        # search over the whole word list instead makes its first probe half of
+        # the *remaining* text, which is what made fitting a long placeholder
+        # quadratic in its word count.
+        lo, hi = 1, 2
+        while hi < len(words) and fits(hi):
+            lo, hi = hi, hi * 2
+        hi = min(hi, len(words))
+
+        # ---largest word count in [lo, hi] that still fits---
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if fits(mid):
+                lo = mid
+            else:
+                hi = mid - 1
+
+        return _Line(" ".join(words[:lo]), _LineSource(" ".join(words[lo:])))
 
     def _fits_in_width_predicate(self, point_size):
         """
@@ -109,19 +137,33 @@ class TextFitter(tuple):
         """
         Return a sequence of str values representing the text in
         *line_source* wrapped within this fitter when rendered at
-        *point_size*.
+        *point_size*, or |None| if it cannot be wrapped to fit.
         """
-        result = self._break_line(line_source, point_size)
-        if result is None:
-            return None
-        text, remainder = result
-        lines = [text]
-        if remainder:
-            remaining_lines = self._wrap_lines(remainder, point_size)
-            if remaining_lines is None:
+        # Once the wrapped text is taller than the frame, the point size has
+        # already lost; there is no reason to keep wrapping the remaining
+        # words. Oversized candidate sizes bail after a couple of lines rather
+        # than wrapping the whole text first. `_height` is None in unit
+        # fixtures that exercise wrapping in isolation, so cap only when known.
+        max_lines = None
+        if self._height is not None:
+            line_height = _rendered_size("Ty", point_size, self._font_file)[1]
+            if line_height <= 0:
                 return None
-            lines.extend(remaining_lines)
-        return lines
+            max_lines = self._height // line_height
+
+        # Iterative rather than recursive: a long text frame at a small point
+        # size wraps to more lines than the interpreter's recursion limit.
+        lines = []
+        while True:
+            result = self._break_line(line_source, point_size)
+            if result is None:
+                return None
+            text, line_source = result
+            lines.append(text)
+            if max_lines is not None and len(lines) > max_lines:
+                return None
+            if not line_source:
+                return lines
 
 
 class _BinarySearchTree(object):

@@ -106,20 +106,53 @@ class DescribeTextFitter(object):
             call(text_fitter, remainder, 21),
         ]
 
-    def it_breaks_off_a_line_to_help_wrap(self, request, line_source_, _BinarySearchTree_):
-        bst_ = instance_mock(request, _BinarySearchTree)
-        _fits_in_width_predicate_ = method_mock(request, TextFitter, "_fits_in_width_predicate")
-        _BinarySearchTree_.from_ordered_sequence.return_value = bst_
-        predicate_ = _fits_in_width_predicate_.return_value
-        max_value_ = bst_.find_max.return_value
-        text_fitter = TextFitter(None, (None, None), None)
+    def it_breaks_off_a_line_to_help_wrap(self, _rendered_size_):
+        # ---10 EMU per character, 50 EMU wide, so 5 characters fit---
+        _rendered_size_.side_effect = lambda text, size, font: (len(text) * 10, 10)
+        text_fitter = TextFitter(None, (50, None), "foobar.ttf")
 
-        value = text_fitter._break_line(line_source_, 21)
+        line, remainder = text_fitter._break_line(_LineSource("aa bb cc dd"), 21)
 
-        _BinarySearchTree_.from_ordered_sequence.assert_called_once_with(line_source_)
-        text_fitter._fits_in_width_predicate.assert_called_once_with(text_fitter, 21)
-        bst_.find_max.assert_called_once_with(predicate_)
-        assert value is max_value_
+        assert line == "aa bb"
+        assert remainder == _LineSource("cc dd")
+
+    def it_breaks_off_the_whole_source_when_it_all_fits(self, _rendered_size_):
+        _rendered_size_.side_effect = lambda text, size, font: (len(text) * 10, 10)
+        text_fitter = TextFitter(None, (500, None), "foobar.ttf")
+
+        line, remainder = text_fitter._break_line(_LineSource("aa bb cc dd"), 21)
+
+        assert line == "aa bb cc dd"
+        assert not remainder
+
+    def but_it_breaks_off_no_line_when_the_first_word_does_not_fit(self, _rendered_size_):
+        _rendered_size_.side_effect = lambda text, size, font: (len(text) * 10, 10)
+        text_fitter = TextFitter(None, (10, None), "foobar.ttf")
+
+        assert text_fitter._break_line(_LineSource("aa bb cc dd"), 21) is None
+
+    def it_probes_a_logarithmic_number_of_break_points(self, _rendered_size_):
+        """Guards the fix for the quadratic-fitting timeout (pptxbuilder #2993).
+
+        The line break must be found by galloping + binary search, never by
+        measuring every candidate prefix -- a 1,000-word placeholder used to
+        push megabytes of substrings through PIL for a single line break.
+        """
+        probes = []
+
+        def measure(text, size, font):
+            probes.append(text)
+            return (len(text) * 10, 10)
+
+        _rendered_size_.side_effect = measure
+        # ---1,000 words, 20 of which fit in the 59-character width---
+        text_fitter = TextFitter(None, (590, None), "foobar.ttf")
+
+        line, _ = text_fitter._break_line(_LineSource(" ".join(["aa"] * 1000)), 21)
+
+        assert line == " ".join(["aa"] * 20)
+        assert len(probes) < 20, "break point search is not logarithmic"
+        assert max(len(p) for p in probes) < 200, "probe strings scale with the remainder"
 
     # fixtures ---------------------------------------------
 
